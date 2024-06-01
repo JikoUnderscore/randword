@@ -1,0 +1,10 @@
+.vscode
+randword/Makefile
+randword/randword.vcxproj
+randword/randword.vcxproj.user
+target
+test
+compile_commands.json
+cppcheck.bat
+Makefile
+randword.sln
