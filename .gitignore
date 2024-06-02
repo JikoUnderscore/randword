@@ -8,3 +8,4 @@ compile_commands.json
 cppcheck.bat
 Makefile
 randword.sln
+.cache
