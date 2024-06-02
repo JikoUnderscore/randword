@@ -38,6 +38,8 @@ project "randword"
         buildoptions {
             "-Wpadded", "-Wconversion", "-Wsign-conversion", "-Wmisleading-indentation",  "-Wnull-dereference",  "-Wdouble-promotion", "-Wimplicit-fallthrough", "-Wunused",
             "-Wno-pre-c23-compat",
+            "-Wno-c++98-compat-pedantic",
+            "-Wno-pre-c++20-compat-pedantic",
             "-Wno-declaration-after-statement",
             -- "unsafe-buffer-usage",
             "-Wno-unsafe-buffer-usage",
