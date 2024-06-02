@@ -170,13 +170,9 @@ static void type_out_characters(std::string_view const str_view) noexcept {
 static void read_line_and_type_char(std::FILE* ifile, std::span<char> buffer, u64& lines_to_skip) noexcept {
     i32 const len_excluding_newline = cast(i32, buffer.size()) - 1;
     if (std::fgets(buffer.data(), len_excluding_newline, ifile) != nullptr) {
-        // auto line_view = std::string_view(buffer.data(), cast(usize, ifile.gcount() - 1));
-        usize const line_len = std::strlen(buffer.data());
+        usize const line_len = std::strlen(buffer.data()) - 1; // Remove the newline character
         auto const line_view = std::string_view(buffer.data(), line_len);
 
-        // if (not line_view.empty() && line_view.back() == '\n') {
-        //     line_view.remove_suffix(1); // Remove the newline character
-        // }
         type_out_characters(line_view);
         ++lines_to_skip;
     }
