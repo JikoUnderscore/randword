@@ -204,29 +204,7 @@ static void poll_even(HWND window_handle, std::FILE* ifile, std::span<char> buff
 }
 
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int nShowCmd) {
-    auto window_res = Window::init(hInstance, nShowCmd, g_WIDTH, g_HEIGHT);
-    if (not window_res.has_value()) {
-        auto const err = window_res.error();
-        MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(err.data()), L"Window Error", MB_OK | MB_ICONEXCLAMATION);
-        return EXIT_FAILURE;
-    }
-    // defer(window_res->deinit()); // comment out to close faster
-
-    // Register Ctrl+Alt+X as a global hotkey
-    if (RegisterHotKey(window_res->h_window, 1, MOD_CONTROL | MOD_ALT, 'X') == 0) {
-        MessageBoxW(
-            nullptr,
-            L"Unable to register a global hotkey",
-            L"RegisterHotKey Error",
-            MB_OK | MB_ICONEXCLAMATION
-        );
-        return EXIT_FAILURE;
-    }
-
-    u64 lines_to_skip = 0;
-    usize off = 0;
-    gsl::owner<std::FILE*> file_line = std::fopen("./skipline.dat", "r+");
+void read_file_line(u64& lines_to_skip, usize& off, gsl::owner<std::FILE*>& file_line) noexcept {
     if (file_line == nullptr) {
         MessageBoxW(
             nullptr,
@@ -266,6 +244,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
             );
         }
     }
+}
+
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int nShowCmd) {
+    auto window_res = Window::init(hInstance, nShowCmd, g_WIDTH, g_HEIGHT);
+    if (not window_res.has_value()) {
+        auto const err = window_res.error();
+        MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(err.data()), L"Window Error", MB_OK | MB_ICONEXCLAMATION);
+        return EXIT_FAILURE;
+    }
+    // defer(window_res->deinit()); // comment out to close faster
+
+    // Register Ctrl+Alt+X as a global hotkey
+    if (RegisterHotKey(window_res->h_window, 1, MOD_CONTROL | MOD_ALT, 'X') == 0) {
+        MessageBoxW(
+            nullptr,
+            L"Unable to register a global hotkey",
+            L"RegisterHotKey Error",
+            MB_OK | MB_ICONEXCLAMATION
+        );
+        return EXIT_FAILURE;
+    }
+
+    u64 lines_to_skip = 0;
+    usize off = 0;
+    gsl::owner<std::FILE*> file_line = std::fopen("./skipline.dat", "r+");
+    read_file_line(lines_to_skip, off, file_line);
     defer(std::fclose(file_line)); // comment out to close faster
 
     DEBUG("lines_to_skip %llu\n", lines_to_skip);
