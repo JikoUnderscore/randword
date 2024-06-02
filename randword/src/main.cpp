@@ -81,7 +81,7 @@ struct Window {
 
         auto const window = Window{
             .h_window = CreateWindowExW(
-                0,
+                WS_EX_TOPMOST,
                 CLASS_NAME,
                 L"Ctrl+Alt+X. Close When Done",
                 style,
@@ -102,6 +102,15 @@ struct Window {
             return std::unexpected(std::string_view("CreateWindowExA failed\n"));
         }
 
+        SetWindowPos(
+            window.h_window,
+            HWND_TOPMOST,
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            SWP_NOMOVE | SWP_NOSIZE
+        );
         (void)ShowWindow(window.h_window, n_cmd_show);
 
         return window;
