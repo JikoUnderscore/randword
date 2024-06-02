@@ -9,7 +9,7 @@
 #define NORASTEROPS
 #define OEMRESOURCE
 #define NOATOM
-#define NOCLIPBOARD
+// #define NOCLIPBOARD
 #define NOCOLOR
 #define NOCTLMGR
 #define NODRAWTEXT

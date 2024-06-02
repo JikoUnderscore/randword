@@ -6,14 +6,17 @@
 #include <cstring>
 #include <expected>
 #include <span>
+#include <string>
 #include <string_view>
 #include "defines.hpp"
 #include "win_include.hpp"
 
 
-// #define DEBUG(...) (void)fprintf(stderr, __VA_ARGS__) // NOLINT
+#ifdef _CONSOLE
+#define DEBUG(...) (void)fprintf(stderr, __VA_ARGS__) // NOLINT
+#else
 #define DEBUG(...)
-
+#endif
 
 constexpr i32 const g_WIDTH = 330;
 constexpr i32 const g_HEIGHT = 100;
@@ -140,6 +143,30 @@ constexpr auto size_t_to_array(usize num) noexcept -> std::array<char, N> {
 }
 
 // chatGPT generated
+void set_clipboard_string(std::string_view str) noexcept {
+    if (OpenClipboard(nullptr) != 0) {
+        EmptyClipboard();
+
+        size_t const size = str.size() + 1; // +1 for null terminator
+        HGLOBAL const hMem = GlobalAlloc(GMEM_MOVEABLE, size);
+        if (hMem != nullptr) {
+            LPSTR memData = cast(LPSTR, GlobalLock(hMem));
+            if (memData != nullptr) {
+                std::memcpy(memData, str.data(), size);
+                GlobalUnlock(hMem);
+
+                SetClipboardData(CF_TEXT, hMem);
+            }
+        }
+
+        CloseClipboard();
+    }
+    else {
+        MessageBoxW(nullptr, L"Unable to copy data to clipboard", L"Clipboard Error", MB_OK | MB_ICONEXCLAMATION);
+    }
+}
+
+// chatGPT generated
 static void type_out_characters(std::string_view const str_view) noexcept {
     for (char chr : str_view) {
         auto keyboard_input = KEYBDINPUT{};
@@ -167,22 +194,28 @@ static void type_out_characters(std::string_view const str_view) noexcept {
     }
 }
 
-static void read_line_and_type_char(std::FILE* ifile, std::span<char> buffer, u64& lines_to_skip) noexcept {
+static auto read_line(std::FILE* const ifile, std::span<char> buffer, u64& lines_to_skip) noexcept -> std::string_view {
     i32 const len_excluding_newline = cast(i32, buffer.size()) - 1;
     if (std::fgets(buffer.data(), len_excluding_newline, ifile) != nullptr) {
         usize const line_len = std::strlen(buffer.data()) - 1; // Remove the newline character
         auto const line_view = std::string_view(buffer.data(), line_len);
 
-        type_out_characters(line_view);
         ++lines_to_skip;
+        return line_view;
     }
-    else {
-        std::rewind(ifile);
-        lines_to_skip = 0;
-    }
+
+    std::rewind(ifile);
+    lines_to_skip = 0;
+    return {};
 }
 
-static void poll_even(HWND window_handle, std::FILE* ifile, std::span<char> buffer, u64& lines_to_skip) noexcept {
+static void poll_even(
+    HWND window_handle,
+    std::FILE* const ifile,
+    std::span<char> buffer,
+    u64& lines_to_skip,
+    bool const use_clipboard
+) noexcept {
     MSG msg;
     while (PeekMessageW(&msg, window_handle, 0, 0, PM_REMOVE) != 0) {
         if (msg.message == WM_QUIT) {
@@ -193,7 +226,16 @@ static void poll_even(HWND window_handle, std::FILE* ifile, std::span<char> buff
             if (msg.wParam == 1) {
                 // MessageBoxW(nullptr, L"Ctrl+Alt+X pressed!", L"Global Hotkey", MB_ICONINFORMATION);
                 Sleep(300);
-                read_line_and_type_char(ifile, buffer, lines_to_skip);
+                auto const live_view = read_line(ifile, buffer, lines_to_skip);
+
+                if (use_clipboard) {
+                    set_clipboard_string(live_view);
+                    DEBUG("call set_clipboard_string\n");
+                }
+                else {
+                    type_out_characters(live_view);
+                    DEBUG("call type_out_characters\n");
+                }
                 break; // Exit the message loop after handling the hotkey
             }
         }
@@ -294,14 +336,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
         // Just read and discard the line
     }
 
+    int arg_count = __argc;
+    char** arg_values = __argv;
+
+    bool use_clipboard = false;
+    if (arg_count >= 2) {
+        if (std::strcmp(arg_values[1], "clip") == 0) {
+            use_clipboard = true;
+            DEBUG("HIT\n");
+        }
+    }
 
     while (g_IS_RUNNING) {
-        poll_even(window_res->h_window, ifile, buffer, lines_to_skip);
+        poll_even(window_res->h_window, ifile, buffer, lines_to_skip, use_clipboard);
         Sleep(MILISECONDS_SLEEP);
     }
 
     UnregisterHotKey(window_res->h_window, 1);
-
 
     auto const skpline_array = size_t_to_array<SKILINE_NUMBER_SIZE>(lines_to_skip);
     (void)std::fseek(file_line, 0, SEEK_SET);
