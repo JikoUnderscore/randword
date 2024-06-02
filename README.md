@@ -14,6 +14,8 @@ use premake to build with conmmands:
 The compleated program must contain 3 files. No more. No less. Three shalt be the number of files thou shalt have, and the number of the files shalt be three. Four files shalt thou not have, nor either have thou two files, excepting that thou then proceed to three files. Five files is right out. Once the number of files is three, being the third number, be reached, then thou canne usest thou program.
 
 ## Use
-1) Start the program.
-2) Press Ctrl+Alt+X to iterate the line in the `word.txt` (it must exist) file
-3) Clse program to save curent line to `skipline.dat` (it must exist)
+1. Start the program.
+    1. pass argument `clip` to save next word to clipboard
+    2. pass no argument to type it out itself
+2. Press Ctrl+Alt+X to iterate the line in the `word.txt` (it must exist) file
+3. Clse program to save curent line to `skipline.dat` (it must exist) file
