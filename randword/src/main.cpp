@@ -1,7 +1,10 @@
 // #include <synchapi.h>
 #include <array>
+#include <charconv>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <expected>
-#include <fstream>
 #include <span>
 #include <string_view>
 #include "defines.hpp"
@@ -16,6 +19,7 @@ constexpr i32 const g_WIDTH = 330;
 constexpr i32 const g_HEIGHT = 100;
 constexpr i32 const MILISECONDS_SLEEP = 19 * 2;
 constexpr usize const BUFFER_SIZE = 128;
+constexpr usize const SKILINE_NUMBER_SIZE = 8;
 
 
 static bool g_IS_RUNNING = true;
@@ -59,9 +63,7 @@ struct Window {
         if (RegisterClassExW(&wcex) == 0) {
             return std::unexpected(std::string_view("RegisterClassEx\n"));
         }
-
         constexpr i32 const OFFSET = 100;
-
 
         auto rect = RECT{
             .left = OFFSET,
@@ -69,7 +71,6 @@ struct Window {
             .right = OFFSET + width,
             .bottom = OFFSET + height,
         };
-
 
         i64 const style{WS_CAPTION | WS_GROUP | WS_SYSMENU | WS_SIZEBOX};
         if (AdjustWindowRect(&rect, style, 0) == 0) {
@@ -113,6 +114,31 @@ struct Window {
     HINSTANCE h_instatnce;
 };
 
+
+// chatGPT generated
+// 21 is the maximum number of characters needed for 64-bit size_t (20 digits + sign)
+template <usize N = 21>
+constexpr auto size_t_to_array(usize num) noexcept -> std::array<char, N> {
+    auto result = std::array<char, N>({});
+    auto iter = std::rbegin(result);
+    do {
+        *iter++ = '0' + (num % 10);
+        num /= 10;
+    }
+    while (num != 0);
+
+    auto res = std::array<char, N>({});
+    usize i = 0;
+    for (char ele : result) {
+        if (ele != '\0') {
+            res[i] = ele;
+            ++i;
+        }
+    }
+
+    return res;
+}
+
 // chatGPT generated
 static void type_out_characters(std::string_view const str_view) noexcept {
     for (char chr : str_view) {
@@ -141,23 +167,26 @@ static void type_out_characters(std::string_view const str_view) noexcept {
     }
 }
 
-static void read_line_and_type_char(std::ifstream& ifs, std::span<char> buffer, u64& lines_to_skip) noexcept {
-    isize const len_excluding_newline = cast(isize, buffer.size()) - 1;
-    if (ifs.getline(buffer.data(), len_excluding_newline)) {
-        auto line_view = std::string_view(buffer.data(), cast(usize, ifs.gcount() - 1));
+static void read_line_and_type_char(std::FILE* ifile, std::span<char> buffer, u64& lines_to_skip) noexcept {
+    i32 const len_excluding_newline = cast(i32, buffer.size()) - 1;
+    if (std::fgets(buffer.data(), len_excluding_newline, ifile) != nullptr) {
+        // auto line_view = std::string_view(buffer.data(), cast(usize, ifile.gcount() - 1));
+        usize const line_len = std::strlen(buffer.data());
+        auto const line_view = std::string_view(buffer.data(), line_len);
+
         // if (not line_view.empty() && line_view.back() == '\n') {
         //     line_view.remove_suffix(1); // Remove the newline character
         // }
         type_out_characters(line_view);
+        ++lines_to_skip;
     }
     else {
-        ifs.close();
-        ifs = std::ifstream("./words.txt");
+        std::rewind(ifile);
         lines_to_skip = 0;
     }
 }
 
-static void poll_even(HWND window_handle, std::ifstream& ifs, std::span<char> buffer, u64& lines_to_skip) noexcept {
+static void poll_even(HWND window_handle, std::FILE* ifile, std::span<char> buffer, u64& lines_to_skip) noexcept {
     MSG msg;
     while (PeekMessageW(&msg, window_handle, 0, 0, PM_REMOVE) != 0) {
         if (msg.message == WM_QUIT) {
@@ -168,8 +197,7 @@ static void poll_even(HWND window_handle, std::ifstream& ifs, std::span<char> bu
             if (msg.wParam == 1) {
                 // MessageBoxW(nullptr, L"Ctrl+Alt+X pressed!", L"Global Hotkey", MB_ICONINFORMATION);
                 Sleep(300);
-                read_line_and_type_char(ifs, buffer, lines_to_skip);
-                ++lines_to_skip;
+                read_line_and_type_char(ifile, buffer, lines_to_skip);
                 break; // Exit the message loop after handling the hotkey
             }
         }
@@ -201,9 +229,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
     }
 
     u64 lines_to_skip = 0;
-    isize off = 0;
-    auto file_line = std::fstream("./skipline.dat");
-    if (not file_line.is_open()) {
+    usize off = 0;
+    gsl::owner<std::FILE*> file_line = std::fopen("./skipline.dat", "r+");
+    if (file_line == nullptr) {
         MessageBoxW(
             nullptr,
             L"Unable to find a file named `skipline.dat` in curent dir. Continuing from 0",
@@ -212,25 +240,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
         );
     }
     else {
-        auto const buffer =
-            std::string((std::istreambuf_iterator<char>(file_line)), (std::istreambuf_iterator<char>()));
-        off = cast(isize, buffer.size());
-        auto [ptr, ec] = std::from_chars(buffer.data(), buffer.data() + buffer.size(), lines_to_skip);
-        if (ec != std::errc()) {
+        (void)std::fseek(file_line, 0, SEEK_END);
+        off = cast(usize, std::ftell(file_line));
+        std::rewind(file_line);
+
+        auto file_line_buff = std::array<char, SKILINE_NUMBER_SIZE>();
+        usize const n_read_successfully = std::fread(file_line_buff.data(), 1, off, file_line);
+        if (n_read_successfully == static_cast<size_t>(off)) {
+            // Convert the data in the buffer to a number
+            auto [ptr, ec] =
+                std::from_chars(file_line_buff.data(), file_line_buff.data() + file_line_buff.size(), lines_to_skip);
+            if (ec != std::errc()) {
+                lines_to_skip = 0;
+                MessageBoxW(
+                    nullptr,
+                    L"Cannot convert the data in `skipline.dat` to a number. Continuing from 0",
+                    L"Conversion Error",
+                    MB_OK | MB_ICONEXCLAMATION
+                );
+            }
+        }
+        else {
             lines_to_skip = 0;
             MessageBoxW(
                 nullptr,
-                L"Can not convert the data in `kastkube.dat` to a number. Continuing from 0",
-                L"Conversion error",
+                L"Error reading the file `skipline.dat`. Continuing from 0",
+                L"File Read Error",
                 MB_OK | MB_ICONEXCLAMATION
             );
         }
     }
-    defer(file_line.close()); // comment out to close faster
+    defer(std::fclose(file_line)); // comment out to close faster
 
+    DEBUG("lines_to_skip %llu\n", lines_to_skip);
 
-    auto ifs = std::ifstream("./words.txt");
-    if (not ifs.is_open()) {
+    gsl::owner<std::FILE*> ifile = std::fopen("./words.txt", "r");
+    if (ifile == nullptr) {
         MessageBoxW(
             nullptr,
             L"Unable to find a file named `words.txt` in curent dir",
@@ -239,23 +284,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
         );
         return EXIT_FAILURE;
     }
-    defer(ifs.close()); // comment out to close faster
+    defer(std::fclose(ifile)); // comment out to close faster
 
 
     auto buffer = std::array<char, BUFFER_SIZE>();
-    for (usize i = 0; i < lines_to_skip && ifs.getline(buffer.data(), buffer.size()); ++i) {
+    for (usize i = 0; i < lines_to_skip && (std::fgets(buffer.data(), buffer.size(), ifile) != nullptr); ++i) {
+        DEBUG("%zu\n", i + 1);
         // Just read and discard the line
     }
 
+
     while (g_IS_RUNNING) {
-        poll_even(window_res->h_window, ifs, buffer, lines_to_skip);
+        poll_even(window_res->h_window, ifile, buffer, lines_to_skip);
         Sleep(MILISECONDS_SLEEP);
     }
 
     UnregisterHotKey(window_res->h_window, 1);
 
-    file_line.seekp(-static_cast<std::streamoff>(off), std::ios::cur);
-    file_line << lines_to_skip;
+
+    auto const skpline_array = size_t_to_array<SKILINE_NUMBER_SIZE>(lines_to_skip);
+    (void)std::fseek(file_line, 0, SEEK_SET);
+    (void)fwrite(skpline_array.data(), sizeof(char), skpline_array.size(), file_line);
 }
 #ifdef _CONSOLE
 int main() {
