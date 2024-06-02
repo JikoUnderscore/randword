@@ -1,4 +1,4 @@
-// #include <synchapi.h>
+#define _CRT_SECURE_NO_WARNINGS
 #include <array>
 #include <charconv>
 #include <cstdio>
@@ -48,6 +48,7 @@ struct Window {
     NODIS inline static auto init(HINSTANCE instance, i32 n_cmd_show, const i32 width, const i32 height)
         -> std::expected<Window, std::string_view> {
         auto wcex = WNDCLASSEXW{
+            .cbSize = sizeof(WNDCLASSEXW),
             .style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW,
             .lpfnWndProc = WindowProc,
             .cbClsExtra = 0,
@@ -60,8 +61,6 @@ struct Window {
             .lpszClassName = CLASS_NAME,
             .hIconSm = nullptr,
         };
-
-        wcex.cbSize = sizeof(wcex);
 
         if (RegisterClassExW(&wcex) == 0) {
             return std::unexpected(std::string_view("RegisterClassEx\n"));
@@ -143,7 +142,7 @@ constexpr auto size_t_to_array(usize num) noexcept -> std::array<char, N> {
 }
 
 // chatGPT generated
-void set_clipboard_string(std::string_view str) noexcept {
+static void set_clipboard_string(std::string_view str) noexcept {
     if (OpenClipboard(nullptr) != 0) {
         EmptyClipboard();
 
@@ -246,7 +245,7 @@ static void poll_even(
 }
 
 
-void read_file_line(u64& lines_to_skip, usize& off, gsl::owner<std::FILE*>& file_line) noexcept {
+static void read_file_line(u64& lines_to_skip, usize& off, gsl::owner<std::FILE*>& file_line) noexcept {
     if (file_line == nullptr) {
         MessageBoxW(
             nullptr,
