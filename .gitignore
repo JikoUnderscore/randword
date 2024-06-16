@@ -10,3 +10,4 @@ Makefile
 randword.sln
 .cache
 program
+.vs

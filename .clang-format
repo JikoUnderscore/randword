@@ -30,7 +30,7 @@ BraceWrapping:
   SplitEmptyRecord: true
   SplitEmptyNamespace: true
 BreakBeforeBraces: Custom
-ColumnLimit: 120
+ColumnLimit: 100
 # ContinuationIndentWidth: 0
 # Cpp11BracedListStyle: false
 IncludeCategories: 

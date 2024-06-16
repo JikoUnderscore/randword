@@ -45,8 +45,9 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, usize wParam, isize lPa
 struct Window {
     static constexpr const auto CLASS_NAME{L"DXWindow"};
 
-    NODIS inline static auto init(HINSTANCE instance, i32 n_cmd_show, const i32 width, const i32 height)
-        -> std::expected<Window, std::string_view> {
+    NODIS inline static auto
+        init(HINSTANCE instance, i32 n_cmd_show, const i32 width, const i32 height)
+            -> std::expected<Window, std::string_view> {
         auto wcex = WNDCLASSEXW{
             .cbSize = sizeof(WNDCLASSEXW),
             .style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW,
@@ -74,7 +75,7 @@ struct Window {
             .bottom = OFFSET + height,
         };
 
-        i64 const style{WS_CAPTION | WS_GROUP | WS_SYSMENU | WS_SIZEBOX};
+        i64 const style = WS_CAPTION | WS_GROUP | WS_SYSMENU | WS_SIZEBOX;
         if (AdjustWindowRect(&rect, style, 0) == 0) {
             return std::unexpected(std::string_view("AdjustWindowRect failed\n"));
         }
@@ -156,21 +157,26 @@ static void set_clipboard_string(std::string_view str) noexcept {
         EmptyClipboard();
 
         size_t const size = str.size() + 1; // +1 for null terminator
-        HGLOBAL const hMem = GlobalAlloc(GMEM_MOVEABLE, size);
-        if (hMem != nullptr) {
-            LPSTR memData = cast(LPSTR, GlobalLock(hMem));
-            if (memData != nullptr) {
-                std::memcpy(memData, str.data(), size);
-                GlobalUnlock(hMem);
+        HGLOBAL const h_mem = GlobalAlloc(GMEM_MOVEABLE, size);
+        if (h_mem != nullptr) {
+            auto* mem_data = cast(LPSTR, GlobalLock(h_mem));
+            if (mem_data != nullptr) {
+                std::memcpy(mem_data, str.data(), size);
+                GlobalUnlock(h_mem);
 
-                SetClipboardData(CF_TEXT, hMem);
+                SetClipboardData(CF_TEXT, h_mem);
             }
         }
 
         CloseClipboard();
     }
     else {
-        MessageBoxW(nullptr, L"Unable to copy data to clipboard", L"Clipboard Error", MB_OK | MB_ICONEXCLAMATION);
+        MessageBoxW(
+            nullptr,
+            L"Unable to copy data to clipboard",
+            L"Clipboard Error",
+            MB_OK | MB_ICONEXCLAMATION
+        );
     }
 }
 
@@ -181,7 +187,7 @@ static void type_out_characters(std::string_view const str_view) noexcept {
         auto input = INPUT{};
 
         // Set the virtual key code
-        SHORT vkey = VkKeyScan(chr);
+        SHORT vkey = VkKeyScanA(chr);
         if (vkey == -1) {
             DEBUG("Cannot map character to virtual key: %c\n", chr);
             continue;
@@ -189,7 +195,7 @@ static void type_out_characters(std::string_view const str_view) noexcept {
 
         // Set up the INPUT structure for key press
         keyboard_input.wVk = LOBYTE(vkey);
-        keyboard_input.wScan = cast(u16, MapVirtualKey(keyboard_input.wVk, MAPVK_VK_TO_VSC));
+        keyboard_input.wScan = cast(u16, MapVirtualKeyA(keyboard_input.wVk, MAPVK_VK_TO_VSC));
         keyboard_input.dwFlags = 0;
         input.type = INPUT_KEYBOARD;
         input.ki = keyboard_input;
@@ -202,7 +208,8 @@ static void type_out_characters(std::string_view const str_view) noexcept {
     }
 }
 
-static auto read_line(std::FILE* const ifile, std::span<char> buffer, u64& lines_to_skip) noexcept -> std::string_view {
+static auto read_line(std::FILE* const ifile, std::span<char> buffer, u64& lines_to_skip) noexcept
+    -> std::string_view {
     i32 const len_excluding_newline = cast(i32, buffer.size()) - 1;
     if (std::fgets(buffer.data(), len_excluding_newline, ifile) != nullptr) {
         usize const line_len = std::strlen(buffer.data()) - 1; // Remove the newline character
@@ -232,7 +239,6 @@ static void poll_even(
         }
         if (msg.message == WM_HOTKEY) {
             if (msg.wParam == 1) {
-                // MessageBoxW(nullptr, L"Ctrl+Alt+X pressed!", L"Global Hotkey", MB_ICONINFORMATION);
                 Sleep(300);
                 auto const live_view = read_line(ifile, buffer, lines_to_skip);
 
@@ -254,7 +260,7 @@ static void poll_even(
 }
 
 
-static void read_file_line(u64& lines_to_skip, usize& off, gsl::owner<std::FILE*>& file_line) noexcept {
+static void read_file_line(u64& lines_to_skip, gsl::owner<std::FILE*>& file_line) noexcept {
     if (file_line == nullptr) {
         MessageBoxW(
             nullptr,
@@ -265,15 +271,18 @@ static void read_file_line(u64& lines_to_skip, usize& off, gsl::owner<std::FILE*
     }
     else {
         (void)std::fseek(file_line, 0, SEEK_END);
-        off = cast(usize, std::ftell(file_line));
+        usize const off = cast(usize, std::ftell(file_line));
         std::rewind(file_line);
 
         auto file_line_buff = std::array<char, SKILINE_NUMBER_SIZE>();
         usize const n_read_successfully = std::fread(file_line_buff.data(), 1, off, file_line);
         if (n_read_successfully == static_cast<size_t>(off)) {
             // Convert the data in the buffer to a number
-            auto [ptr, ec] =
-                std::from_chars(file_line_buff.data(), file_line_buff.data() + file_line_buff.size(), lines_to_skip);
+            auto [ptr, ec] = std::from_chars(
+                file_line_buff.data(),
+                file_line_buff.data() + file_line_buff.size(),
+                lines_to_skip
+            );
             if (ec != std::errc()) {
                 lines_to_skip = 0;
                 MessageBoxW(
@@ -297,11 +306,16 @@ static void read_file_line(u64& lines_to_skip, usize& off, gsl::owner<std::FILE*
 }
 
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCmdLine*/, int nShowCmd) {
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /**/, PSTR /**/, int nShowCmd) {
     auto window_res = Window::init(hInstance, nShowCmd, g_WIDTH, g_HEIGHT);
     if (not window_res.has_value()) {
         auto const err = window_res.error();
-        MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(err.data()), L"Window Error", MB_OK | MB_ICONEXCLAMATION);
+        MessageBoxW(
+            nullptr,
+            reinterpret_cast<LPCWSTR>(err.data()),
+            L"Window Error",
+            MB_OK | MB_ICONEXCLAMATION
+        );
         return EXIT_FAILURE;
     }
     // defer(window_res->deinit()); // comment out to close faster
@@ -318,9 +332,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
     }
 
     u64 lines_to_skip = 0;
-    usize off = 0;
     gsl::owner<std::FILE*> file_line = std::fopen("./skipline.dat", "r+");
-    read_file_line(lines_to_skip, off, file_line);
+    read_file_line(lines_to_skip, file_line);
     defer(std::fclose(file_line)); // comment out to close faster
 
     DEBUG("lines_to_skip %llu\n", lines_to_skip);
@@ -339,7 +352,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, PSTR /*lpCm
 
 
     auto buffer = std::array<char, BUFFER_SIZE>();
-    for (usize i = 0; i < lines_to_skip && (std::fgets(buffer.data(), buffer.size(), ifile) != nullptr); ++i) {
+    for (usize i = 0; i < lines_to_skip &&
+         (std::fgets(buffer.data(), cast(i32, buffer.size()), ifile) != nullptr);
+         ++i) {
         DEBUG("%zu\n", i + 1);
         // Just read and discard the line
     }
