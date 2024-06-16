@@ -161,7 +161,7 @@ static void set_clipboard_string(std::string_view str) noexcept {
         if (h_mem != nullptr) {
             auto* mem_data = cast(LPSTR, GlobalLock(h_mem));
             if (mem_data != nullptr) {
-                std::memcpy(mem_data, str.data(), size);
+                std::memcpy(mem_data, str.data(), str.size());
                 GlobalUnlock(h_mem);
 
                 SetClipboardData(CF_TEXT, h_mem);
